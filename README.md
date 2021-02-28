@@ -15,7 +15,10 @@
 
 
 ## 動作デモ
-* https://nasu-tomoyuki.github.io/cmiyc/
+![デモ](demo.png)
+
+* このページで操作できます
+  * https://nasu-tomoyuki.github.io/cmiyc/
 
 
 ## かんたんな解説
