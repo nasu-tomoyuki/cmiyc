@@ -34,6 +34,8 @@ namespace View
 		public GameObject GemModel { get; private set; }
 		public GameObject SakeModel { get; private set; }
 
+		public bool IsViewHazard { get; set; }
+
 
 		// Start is called before the first frame update
 		void Start()
@@ -79,6 +81,8 @@ namespace View
 			SakeModel = transform.Find("Sake").gameObject;
 			SakeModel.SetActive(false);
 			SakeModel.transform.localPosition = Vector3.zero;
+
+			IsViewHazard = false;
 		}
 
 		void Update()

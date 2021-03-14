@@ -28,7 +28,10 @@ namespace Logic
 		States _nextState;
 
 
-		struct Hunter
+		/// <summary>
+		/// 書き込むユニットの情報を一時保存する
+		/// </summary>
+		struct UnitData
 		{
 			public int2 Position { get; }
 			public float ViewLength { get; }
@@ -36,7 +39,7 @@ namespace Logic
 			public float2 LookAt { get; }
 			public UnitStateFlags States { get; }
 
-			public Hunter(Unit u)
+			public UnitData(Unit u)
 			{
 				Position = u.GridPosition;
 				ViewLength = u.View.Length;
@@ -45,10 +48,11 @@ namespace Logic
 				States = u.States;
 			}
 		}
-		List<Hunter> _hunters = new List<Hunter>();
-		List<Hunter> _gems = new List<Hunter>();
+		List<UnitData> _hunters = new List<UnitData>();
+		List<UnitData> _gems = new List<UnitData>();
 
 		uint _aroundMap;
+		uint _objectMap;
 
 
 		class Triangle
@@ -109,26 +113,32 @@ namespace Logic
 				// 画面外
 				if ((uint)ix >= _graph.Size.x || (uint)iy >= _graph.Size.y)
 				{
-					_isHit = true;
+					onHit();
 					return;
 				}
 
 				var node = _graph.Map[iy, ix];
 				if (node.Terrain != (uint)Pathfinding.TerrainRoles.Ground)
 				{
-					_isHit = true;
+					onHit();
 					if (_isCancelAfterHit)
 					{
 						return;
 					}
 				}
 
-				if (_isHit)
-				{
-					_heat /= 2;
-				}
 				_heatMap.write(ix, iy, _heat);
 				_heat = max(0, _heat - _heatStep);
+			}
+
+			void onHit() {
+				if (_isHit)
+				{
+					return;
+				}
+				_isHit = true;
+				// 障害物にぶつかったら危険度を適当に下げる
+				_heat /= 4;
 			}
 		}
 		Triangle _triangle = new Triangle();
@@ -144,6 +154,7 @@ namespace Logic
 			_aroundWriter = writeAround();
 
 			_aroundMap = Core.HandleManager.INVALID;
+			_objectMap = Core.HandleManager.INVALID;
 		}
 
 		public void register(Unit u)
@@ -157,8 +168,10 @@ namespace Logic
 
 		public void update()
 		{
+			// 作業用マップを開放されないようにタッチする
 			var map = WorldManager.Instance.RentalHeatMap;
 			map.touch(_aroundMap);
+			map.touch(_objectMap);
 
 			_updater.MoveNext();
 		}
@@ -169,18 +182,27 @@ namespace Logic
 			{
 				var map = WorldManager.Instance.RentalHeatMap;
 				var am = map[_aroundMap];
+				var om = map[_objectMap];
 
 				switch (_state)
 				{
+					// 初期設定
 					case States.Init:
 						{
 							_nextState = States.Collecting;
+							// 作業用のマップを借りる
 							if (am == null)
 							{
 								_aroundMap = WorldManager.Instance.RentalHeatMap.alloc();
 							}
+							if (om == null)
+							{
+								_objectMap = WorldManager.Instance.RentalHeatMap.alloc();
+							}
 							am = map[_aroundMap];
-							if (am == null)
+							om = map[_objectMap];
+							// 借りることができなかったらリトライ
+							if (am == null || om == null)
 							{
 								break;
 							}
@@ -188,10 +210,12 @@ namespace Logic
 							_hunters.Clear();
 							_gems.Clear();
 
-							am.flip(0);
+							am.flip();
+							om.flip();
 							_state = _nextState;
 						}
 						break;
+					// 対象のユニットを収集
 					case States.Collecting:
 						{
 							_nextState = States.WriteAround;
@@ -204,36 +228,37 @@ namespace Logic
 									_units.RemoveAt(i);
 									continue;
 								}
-								var hunter = new Hunter(u);
 
 								if (u.Role == Roles.Hunter)
 								{
-									_hunters.Add(hunter);
+									_hunters.Add(new UnitData(u));
 								}
 								if (u.Role == Roles.Gem)
 								{
-									_gems.Add(hunter);
+									_gems.Add(new UnitData(u));
 								}
 							}
 							_state = _nextState;
 						}
 						break;
+					// ハンターの周囲の危険度を書く around map
 					case States.WriteAround:
 						{
 							_nextState = States.WriteView;
 							_aroundWriter.MoveNext();
 						}
 						break;
+					// ハンターの視野の危険度を書く hunter view map
 					case States.WriteView:
 						{
 							_nextState = States.WriteGem;
 							_viewWriter.MoveNext();
 						}
 						break;
+					// 宝石の位置に危険度を書き込む object map
 					case States.WriteGem:
 						{
 							_nextState = States.Merge;
-							var om = WorldManager.Instance.ObjectMap;
 							foreach (var h in _gems)
 							{
 								om.add(h.Position.x, h.Position.y, WorldManager.GEM_HAZARD);
@@ -241,11 +266,12 @@ namespace Logic
 							_state = _nextState;
 						}
 						break;
+					// 書き込んだマップを合成する hazard map
+					// around map + hunter view map + object map = hazard map
 					case States.Merge:
 						{
 							_nextState = States.Apply;
 							var hvm = WorldManager.Instance.HunterViewMap;
-							var om = WorldManager.Instance.ObjectMap;
 							am.flip();
 							hvm.flip();
 							om.flip();
@@ -262,11 +288,10 @@ namespace Logic
 							_state = _nextState;
 						}
 						break;
+					// 合成結果の hazard map を反映する
 					case States.Apply:
 						{
 							_nextState = States.Init;
-							// WorldManager.Instance.HunterViewMap.flip();
-							// WorldManager.Instance.ObjectMap.flip();
 							WorldManager.Instance.HazardMap.flip();
 							_state = _nextState;
 						}
@@ -276,6 +301,10 @@ namespace Logic
 			}
 		}
 
+		/// <summary>
+		/// ハンターの視野の危険度を書く
+		/// </summary>
+		/// <returns></returns>
 		IEnumerator writeView()
 		{
 			while (true)
@@ -293,11 +322,9 @@ namespace Logic
 					var q = Unity.Mathematics.quaternion.Euler(0, 0, radians(h.FoV * 0.5f));
 					var p = float3(h.LookAt * (h.ViewLength + 0.5f), 0);
 					var a = int2(h.Position + half);
-					var b = a + int2(rotate(q, p).xy + half);
-					var c = a + int2(rotate(conjugate(q), p).xy + half);
+					var b = int2(h.Position + rotate(q, p).xy + half);
+					var c = int2(h.Position + rotate(conjugate(q), p).xy + half);
 
-					var tb = rotate(q, p);
-					var tc = rotate(conjugate(q), p);
 					_triangle.draw(a, b, c);
 
 					yield return null;
@@ -307,13 +334,18 @@ namespace Logic
 			}
 		}
 
+		/// <summary>
+		/// ハンターの周囲に危険度を書き込む
+		/// </summary>
+		/// <returns></returns>
 		IEnumerator writeAround()
 		{
 			while (true)
 			{
 				var map = WorldManager.Instance.RentalHeatMap;
 				var am = map[_aroundMap];
-				_triangle.setup(am, WorldManager.HUNTER_HAZARD / 10, WorldManager.HAZARD_STEP / 10, false);
+				// 危険度は、視野内よりも適当に下げる
+				_triangle.setup(am, WorldManager.HUNTER_HAZARD / 4, WorldManager.HAZARD_STEP / 4, false);
 
 				var half = float2(0.5f, 0.5f);
 				foreach (var hu in _hunters)
@@ -321,7 +353,7 @@ namespace Logic
 					var a = int2(hu.Position + half);
 					if ((hu.States & UnitStateFlags.Idling) == 0)
 					{
-						var l = (int)(hu.ViewLength + 1.0f);
+						var l = (int)(hu.ViewLength + 1.0f);	// ぴったりではなく少し広げる
 						var w = int2(l, 0);
 						var h = int2(0, l);
 						var b = a + w + h;
@@ -334,9 +366,6 @@ namespace Logic
 						_triangle.draw(a, d, e);
 						_triangle.draw(a, e, b);
 					}
-
-					// 自分のいる位置は特に危険度を上げる
-					am.add(a.x, a.y, WorldManager.HUNTER_HAZARD);
 
 					yield return null;
 				}

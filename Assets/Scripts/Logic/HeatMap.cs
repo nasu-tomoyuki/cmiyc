@@ -1,4 +1,5 @@
 using Unity.Mathematics;
+using static Unity.Mathematics.math;
 
 namespace Logic
 {
@@ -61,7 +62,7 @@ namespace Logic
 			{
 				return;
 			}
-			_map[_writeIndex][y, x] = c;
+			_map[_writeIndex][y, x] = max( _map[_writeIndex][y, x], c );
 		}
 
 		public void add(int x, int y, int c)

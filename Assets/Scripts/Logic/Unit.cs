@@ -569,9 +569,8 @@ namespace Logic
 			var tu = WorldManager.Instance.UnitManager.getUnit(_target);
 			if (tu != null)
 			{
-				// dir = normalize( tu.Position - Position );
+				dir = normalize(tu.Position - Position);
 			}
-			// dir = normalize( targetPosition_ - Position );
 
 			// ラジアン [0, pi]
 			var theta = (1.0f - dot(LookAt, dir)) * 0.5f;

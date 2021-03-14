@@ -34,6 +34,10 @@ namespace View
 		void apply()
 		{
 			var heatMap = WorldManager.Instance.LogicManager.HunterViewMap;
+			if (WorldManager.Instance.IsViewHazard)
+			{
+				heatMap = WorldManager.Instance.LogicManager.HazardMap;
+			}
 			var map = WorldManager.Instance.LogicManager.PathfindingManager.Graph.Map;
 			for (var y = 0; y < _size.y; ++y)
 			{
@@ -59,9 +63,17 @@ namespace View
 							h = 1.0f;
 							break;
 					}
-					if (heatMap[y, x] > 0)
+
+					if (!WorldManager.Instance.IsViewHazard)
 					{
-						mat = WorldManager.Instance.MatHunterView;
+						if (heatMap[y, x] > 0)
+						{
+							mat = WorldManager.Instance.MatHunterView;
+						}
+					}
+					else
+					{
+						h = heatMap[y, x] / (float)(Logic.WorldManager.HUNTER_HAZARD / 10);
 					}
 					go.transform.localScale = new Vector3(0.9f, h, 0.9f);
 					go.GetComponent<Renderer>().material = mat;

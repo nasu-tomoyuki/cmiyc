@@ -34,8 +34,6 @@ namespace Logic
 		internal HeatMap HunterViewMap { get; } = new HeatMap();
 		// 危険度マップ
 		internal HeatMap HazardMap { get; } = new HeatMap();
-		// 配置マップ
-		internal HeatMap ObjectMap { get; } = new HeatMap();
 
 
 		public struct OpenUnitData
@@ -87,7 +85,6 @@ namespace Logic
             var size = WorldManager.Instance.PathfindingManager.Graph.Size;
 			HunterViewMap.setup(size);
 			HazardMap.setup(size);
-			ObjectMap.setup(size);
 		}
 
 		public void start()

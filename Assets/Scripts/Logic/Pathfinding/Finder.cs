@@ -260,7 +260,7 @@ namespace Logic.Pathfinding
 					}
 					push(_closed, node);
 
-					// ゴール判定
+					// A* ならゴール判定
 					if (_method == Methods.AStar)
 					{
 						if (node.Node.Position.Equals(_end.Position))
@@ -370,10 +370,15 @@ namespace Logic.Pathfinding
 					continue;
 				}
 
-				// 到達できなかったので、ゴールに一番近い場所までの経路＝一番ヒューリスティックコストの低い場所までの経路を返す
+				// 到達できなかったので、ゴールに一番近い場所までの経路 == 一番ヒューリスティックコストの低い場所までの経路を返す
 				{
 					StepCost nearest = null;
 					var gcost = uint.MaxValue;
+					var si = indexOf(_closed, _start);
+					if (si >= 0)
+					{
+						gcost = _closed[si].HeuristicCost;
+					}
 					foreach (var n in _closed)
 					{
 						var goalCost = _getGoalCost(n);
@@ -381,7 +386,7 @@ namespace Logic.Pathfinding
 						{
 							if (goalCost == gcost)
 							{
-								if (nearest.TotalCost < n.TotalCost)
+								if (nearest != null && nearest.TotalCost < n.TotalCost)
 								{
 									continue;
 								}
@@ -397,16 +402,16 @@ namespace Logic.Pathfinding
 						_result.Add(r.Node);
 						r = r.From;
 
-						if (_result.Count > 1000)
-						{
-							var text = "";
-							foreach (var m in _result)
-							{
-								text = $"{text}{m.Index}:{m.Position}\n";
-							}
-							UnityEngine.Debug.Log(text);
-							break;
-						}
+						// if (_result.Count > 1000)
+						// {
+						// 	var text = "";
+						// 	foreach (var m in _result)
+						// 	{
+						// 		text = $"{text}{m.Index}:{m.Position}\n";
+						// 	}
+						// 	UnityEngine.Debug.Log(text);
+						// 	break;
+						// }
 					}
 					_result.Reverse();
 				}
@@ -478,8 +483,8 @@ namespace Logic.Pathfinding
 
 		uint getGoalCostAsAdditionalCost(StepCost sc)
 		{
+			// return sc.HeuristicCost;
 			return sc.TotalCost / (uint)(sc.Steps);
-			// return sc.AdditionalCost;
 		}
 
 		uint calcHeuristicCostEmpty(int2 pos, int2 goal)
